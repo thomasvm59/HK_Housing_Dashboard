@@ -136,7 +136,7 @@ def extract_area(address, province):
 @st.cache_data
 def update_database(now_ts):
     property_numbers_list = list_of_properties_scrapping()
-    df_listing_old = load_data_listing_db()
+    df_listing_old = db.load_data("property_listing_details")
     old_number_list = list(df_listing_old['property_number'])
     new_listing = [num for num in property_numbers_list if num not in old_number_list]
     df_listing_new = get_properties_dataframe_parallel(new_listing)
@@ -145,16 +145,18 @@ def update_database(now_ts):
     df_listing_new['property_number']=df_listing_new['property_number'].astype(int)
     df_concat_listing = pd.concat([df_listing_old,df_listing_new.astype(str)]).reset_index(drop=True)
     df_concat_listing = df_concat_listing[lambda x : x.date_published!='Not available'].sort_values('date_published',ascending=False)
-    save_list_properties_db(property_numbers_list, now_ts)
-    save_data_listing_db(df_concat_listing[lambda x : x.property_number.isin(property_numbers_list)])
-
+    df_listing_numbers = pd.DataFrame(property_numbers_list, columns=['property_number'])
+    df_listing_numbers['update_time'] = now_ts
+    db.save_data(df_listing_numbers, "property_numbers_list")
+    db.save_data(df_concat_listing[lambda x : x.property_number.isin(property_numbers_list)], "property_listing_details")
     
+
 @st.cache_data
 def load_data(now_ts, update_db=False):
     if update_db:
         update_database(now_ts)
-    df_listing = load_data_listing_db()
-    df_history = load_data_history_db()
+    df_listing = db.load_data("property_listing_details")
+    df_history = db.load_data("property_listing_history")
     update_dt = datetime.datetime.now(tz=datetime.timezone.utc)
     fx_rates = transform_fx_rates(get_fx_rates())
     coordinates_map=coordinates_map_districts()
