@@ -3,6 +3,11 @@ import pandas as pd
 from data import *
 from style_and_plot import *
 
+st.write(DB_NAME)
+st.write(DB_USER)
+st.write(DB_PASSWORD)
+st.write(DB_HOST)
+st.write(DB_PORT)
 
 #create dataframes from the function 
 now_dt = datetime.datetime.now(tz=datetime.timezone.utc)
