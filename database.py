@@ -4,7 +4,7 @@ import pandas as pd
 import logging
 
 # Ensure the data directory exists
-DB_PATH = "data/housing_results.db"
+DB_PATH = "housing_results.db"
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # Set up logging
