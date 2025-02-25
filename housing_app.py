@@ -3,16 +3,10 @@ import pandas as pd
 from data import *
 from style_and_plot import *
 
-st.write(DB_NAME)
-st.write(DB_USER)
-st.write(DB_PASSWORD)
-st.write(DB_HOST)
-st.write(DB_PORT)
-
 #create dataframes from the function 
 now_dt = datetime.datetime.now(tz=datetime.timezone.utc)
 now_hr_ts = (now_dt.timestamp() // 3600) * 3600
-df_listing, df_history, fx_rates, coordinates_map, update_dt=load_data(now_hr_ts,True)
+df_listing, df_history, fx_rates, coordinates_map, update_dt=load_data(now_hr_ts, False)
 min_ago = int(max((now_dt - update_dt).total_seconds() // 60, 0))
 s = "" if min_ago == 1 else "s"
 st.markdown(
@@ -20,8 +14,7 @@ st.markdown(
     Market data was last updated {min_ago} minute{s} ago at
     {str(update_dt)[:16]} UTC."""
 ) 
-df_history['lease_year'] = df_history['Lease Date'].apply(lambda x : x[:4])
-
+df_history['lease_year'] = df_history['lease_date'].apply(lambda x : x.year)
 df_province = df_history[['province', 'lease_year', 'unit_price']].groupby(['province','lease_year']).mean().unstack()['unit_price']
 df_area_district = df_history[['area_district', 'lease_year', 'unit_price']].groupby(['area_district','lease_year']).mean().unstack()['unit_price']
 df_area = df_history[['area', 'lease_year', 'unit_price']].groupby(['area','lease_year']).mean().unstack()['unit_price']
@@ -179,7 +172,3 @@ if add_sidebar == 'Districts Statistics':
     st.subheader("Price Evolution by district")
     fig_2 = plot_unit_price_evolution(df_area_district,'area_district')
     st.plotly_chart(fig_2)    
-    
-    
-    
-    
