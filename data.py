@@ -147,6 +147,7 @@ def update_database(now_ts):
     df_concat_listing = df_concat_listing[lambda x : x.date_published!='Not available'].sort_values('date_published',ascending=False)
     df_listing_numbers = pd.DataFrame(property_numbers_list, columns=['property_number'])
     df_listing_numbers['update_time'] = now_ts
+    df_listing_numbers['update_time']= pd.to_datetime(df_listing_numbers['update_time'], unit='s')
     db.save_data(df_listing_numbers, "property_numbers_list")
     db.save_data(df_concat_listing[lambda x : x.property_number.isin(property_numbers_list)], "property_listing_details")
     
@@ -191,7 +192,8 @@ def process_data_history(df):
                  })
     df['floor_size'] = pd.to_numeric(df['floor_size'], errors='coerce')
     df['unit_price'] = df['lease_price'].astype(int) / df['floor_size'] 
-    df['lease_date']=pd.to_datetime(df['Lease Date'])
+    #df['lease_date']=pd.to_datetime(df['Lease Date'])
+    df['lease_date']=pd.to_datetime(df['Lease Date'],format="%d/%m/%Y")
     return df
 
 def fix_coordinates(df): # TO MODIFY TO OVERWRITE COORD FROM ADDRESS
