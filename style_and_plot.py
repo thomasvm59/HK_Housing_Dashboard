@@ -8,10 +8,6 @@ import numpy as np
 from branca.colormap import linear
 from plotly.subplots import make_subplots
 
-
-SHORT_COLUMNS = [
-]
-
 # Styling Functions
 def style_values(value, negative_style="color:red;", positive_style="color:green;"):
     """Apply styles based on value."""
