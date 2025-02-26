@@ -1,26 +1,35 @@
 import streamlit as st
-import pandas as pd
 from data import *
 from style_and_plot import *
 
 #create dataframes from the function 
 now_dt = datetime.datetime.now(tz=datetime.timezone.utc)
 now_hr_ts = (now_dt.timestamp() // 3600) * 3600
-df_listing, df_history, fx_rates, coordinates_map, update_dt=load_data(now_hr_ts, False)
+
+#update_database(now_hr_ts)
+
+# Add a button to trigger the update
+# if st.sidebar.button("Update Database"):
+#     with st.spinner("Updating database..."):
+#         try:
+#             update_database(now_hr_ts)
+#             st.success("Database updated successfully!")
+#         except Exception as e:
+#             st.error(f"Error updating database: {e}")
+            
+df_listing, df_history, fx_rates, coordinates_map, update_dt=load_data(now_hr_ts)
 min_ago = int(max((now_dt - update_dt).total_seconds() // 60, 0))
 s = "" if min_ago == 1 else "s"
 st.markdown(
     f"""
     Market data was last updated {min_ago} minute{s} ago at
     {str(update_dt)[:16]} UTC."""
-) 
-df_history['lease_year'] = df_history['lease_date'].apply(lambda x : x.year)
-df_province = df_history[['province', 'lease_year', 'unit_price']].groupby(['province','lease_year']).mean().unstack()['unit_price']
-df_area_district = df_history[['area_district', 'lease_year', 'unit_price']].groupby(['area_district','lease_year']).mean().unstack()['unit_price']
-df_area = df_history[['area', 'lease_year', 'unit_price']].groupby(['area','lease_year']).mean().unstack()['unit_price']
+)
 
+df_province = df_history[['province', 'lease_year', 'unit_price']].dropna().groupby(['province','lease_year']).mean().unstack()['unit_price']
+df_area_district = df_history[['area_district', 'lease_year', 'unit_price']].dropna().groupby(['area_district','lease_year']).mean().unstack()['unit_price']
+df_area = df_history[['area', 'lease_year', 'unit_price']].dropna().groupby(['area','lease_year']).mean().unstack()['unit_price']
 df_listing['historical_average'] = [df_area_district.mean(axis=1).loc[distric] for distric in df_listing['area_district']]
-#df_listing['historical_average'] = [df_area.mean(axis=1).loc[distric] for distric in df_listing['area']]
 df_listing['unit_price_vs_histo']=df_listing['unit_price']/df_listing['historical_average']-1
 
 add_sidebar = st.sidebar.selectbox('Listing Search or District Statistics', ('Listing Search', 'Districts Statistics'))
@@ -143,8 +152,20 @@ if add_sidebar == 'Listing Search':
             plot_map(filtered_df)
         st.header('Listing list')
         st.markdown(f'number of properties : {len(filtered_df)}')
-        df_print = style_dataframe(filtered_df.set_index('property_number')[DISPLAY_COLUMNS])
+        df_print = style_dataframe(filtered_df.set_index('property_number').sort_values('unit_price_vs_histo')[DISPLAY_COLUMNS])
         st.dataframe(df_print)
+        
+        # Function to convert URLs to Markdown format
+        def make_clickable(link):
+            if pd.isna(link) or link == "":
+                return ""  # Return empty string if no valid URL
+            return f'<a href="{link}" target="_blank">Link</a>'
+        # Apply the function to URL columns
+        for col in ["url", "url_transit", "url_history"]:
+            filtered_df[col] = filtered_df[col].apply(make_clickable)
+        # Display DataFrame with clickable links using unsafe_allow_html=True
+        st.markdown(f'details:')
+        st.write(filtered_df[SHORT_DISPLAY_COLUMNS].sort_values('unit_price_vs_histo').to_html(escape=False, index=False), unsafe_allow_html=True)
 
 if add_sidebar == 'Districts Statistics':
     st.header('Current listings average price lease (HKD/SF)')
