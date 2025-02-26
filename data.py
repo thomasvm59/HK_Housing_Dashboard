@@ -105,11 +105,19 @@ areas_mapping = {
     'New Territories': new_t_areas,
     'Islands': island_areas
 }
-DISPLAY_COLUMNS=['province', 'area', 'lease_price','floor_size', 'unit_price',
-        'historical_average','unit_price_vs_histo', 'floor_zone', 'number_of_rooms', 'number_of_bathrooms', 'num_units',
-       'date_published', 'distance_to_office_km', 'address','name', 'url',
-       'url_history','url_transit'
-       ]
+DISPLAY_COLUMNS=[
+    'date_published','province', 'area', 'lease_price','floor_size', 'unit_price',
+    'historical_average','unit_price_vs_histo', 'floor_zone', 'number_of_rooms', 
+    'number_of_bathrooms', 'num_units', 'distance_to_office_km', 'address','name',
+    'url','url_history','url_transit','latitude','longitude'
+]
+
+SHORT_DISPLAY_COLUMNS=[
+    'property_number', 'url', 'url_history','url_transit', 'province', 'area', 
+    'lease_price','floor_size', 'unit_price','historical_average',
+    'unit_price_vs_histo', 'floor_zone', 'number_of_rooms', 'number_of_bathrooms', 
+    'date_published', 'distance_to_office_km', 'address'
+]
 
 COLUMNS_DETAILS_DB = ['date_published', 'property_number',
        'price', 'floor_size', 'floor_size_unit', 'unit_price' ,
@@ -133,29 +141,29 @@ def extract_area(address, province):
                 return area
     return None
 
-@st.cache_data
 def update_database(now_ts):
     property_numbers_list = list_of_properties_scrapping()
+    df_listing_numbers = pd.DataFrame(property_numbers_list, columns=['property_number'])
+    df_listing_numbers['update_time'] = now_ts
+    df_listing_numbers['update_time']= pd.to_datetime(df_listing_numbers['update_time'], unit='s')
+    df_listing_numbers['update_time']=df_listing_numbers['update_time'].astype(str)
+    db.save_data(df_listing_numbers, "property_listing_numbers")
+    
     df_listing_old = db.load_data("property_listing_details")
     old_number_list = list(df_listing_old['property_number'])
     new_listing = [num for num in property_numbers_list if num not in old_number_list]
     df_listing_new = get_properties_dataframe_parallel(new_listing)
     df_listing_new = df_listing_new.dropna(subset=['property_number']).reset_index()
-    df_listing_new=df_listing_new[COLUMNS_DETAILS_DB]
     df_listing_new['property_number']=df_listing_new['property_number'].astype(int)
-    df_concat_listing = pd.concat([df_listing_old,df_listing_new.astype(str)]).reset_index(drop=True)
-    df_concat_listing = df_concat_listing[lambda x : x.date_published!='Not available'].sort_values('date_published',ascending=False)
-    df_listing_numbers = pd.DataFrame(property_numbers_list, columns=['property_number'])
-    df_listing_numbers['update_time'] = now_ts
-    df_listing_numbers['update_time']= pd.to_datetime(df_listing_numbers['update_time'], unit='s')
-    db.save_data(df_listing_numbers, "property_numbers_list")
+    df_listing_new = df_listing_new[COLUMNS_DETAILS_DB]
+    df_concat_listing = pd.concat([df_listing_old, df_listing_new]).reset_index(drop=True)
+    df_concat_listing = df_concat_listing[lambda x : x.date_published!='Not available'].sort_values('date_published',ascending=False).drop('id',axis=1).reset_index(drop=True)
+    df_concat_listing = df_concat_listing.astype(str)
+    df_concat_listing['property_number']=df_concat_listing['property_number'].astype(int)
     db.save_data(df_concat_listing[lambda x : x.property_number.isin(property_numbers_list)], "property_listing_details")
-    
 
 @st.cache_data
-def load_data(now_ts, update_db=False):
-    if update_db:
-        update_database(now_ts)
+def load_data(now_ts):
     df_listing = db.load_data("property_listing_details")
     df_history = db.load_data("property_listing_history")
     update_dt = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -192,8 +200,8 @@ def process_data_history(df):
                  })
     df['floor_size'] = pd.to_numeric(df['floor_size'], errors='coerce')
     df['unit_price'] = df['lease_price'].astype(int) / df['floor_size'] 
-    #df['lease_date']=pd.to_datetime(df['Lease Date'])
     df['lease_date']=pd.to_datetime(df['Lease Date'],format="%d/%m/%Y")
+    df['lease_year'] = df['lease_date'].apply(lambda x : x.year)
     return df
 
 def fix_coordinates(df): # TO MODIFY TO OVERWRITE COORD FROM ADDRESS
@@ -202,7 +210,6 @@ def fix_coordinates(df): # TO MODIFY TO OVERWRITE COORD FROM ADDRESS
     df = df[lambda x : x.latitude.astype(float)<30]
     return df
     
-
 def get_fx_rates():
     # Free Exchange Rate API (replace with your API key if needed)
     url = "https://api.exchangerate-api.com/v4/latest/USD"
@@ -244,4 +251,3 @@ def citymapper_url_from_coords(start_coords, end_coords):
     base_url = "https://citymapper.com/directions?"
     url = f"{base_url}startcoord={start_coords[0]}%2C{start_coords[1]}&endcoord={end_coords[0]}%2C{end_coords[1]}"
     return url
-
