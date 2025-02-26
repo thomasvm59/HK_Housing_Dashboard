@@ -24,9 +24,14 @@ class SupabaseDatabase:
         """Delete existing records and save a DataFrame to a Supabase table."""
         try:
             logging.info(f"Clearing all records from '{table_name}' table.")
-            delete_response = self.client.table(table_name).delete().neq("id", 0).execute()  # Delete all rows
+            delete_response = self.client.table(table_name).delete().neq("id", None).execute()  # Delete all rows
             logging.info(f"Deleted {len(delete_response.data) if delete_response.data else 0} records from '{table_name}'.")
-
+    
+            # Reset primary key sequence
+            self.client.postgrest.rpc("run_sql", {"sql": "ALTER SEQUENCE property_listing_numbers_id_seq RESTART WITH 1;"})
+            logging.info(f"Reset the primary key sequence for '{table_name}'.")
+        
+    
             logging.info(f"Saving {len(df)} new records to '{table_name}' table.")
             data = df.to_dict(orient="records")  # Convert DataFrame to list of dictionaries
             insert_response = self.client.table(table_name).insert(data).execute()
@@ -35,7 +40,7 @@ class SupabaseDatabase:
                 logging.info(f"Successfully saved {len(insert_response.data)} new records to '{table_name}'.")
             else:
                 logging.warning(f"No records inserted into '{table_name}'. Response: {insert_response}")
-        
+    
         except Exception as e:
             logging.error(f"Error in save_data for '{table_name}': {e}")
 
@@ -59,3 +64,5 @@ class SupabaseDatabase:
 
 # Instantiate the Supabase database object
 db = SupabaseDatabase(supabase)
+
+
