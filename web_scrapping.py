@@ -7,11 +7,9 @@ import random
 import pandas as pd
 import numpy as np
 import json
+import streamlit as st
 
 # 1. WEB_SCRAPPING LIST OF PROPERTY NUMBERS
-
-# 1.1 NUMBER OF PAGES OF RESIDENTIAL LISTING
-# 1.2 LIST OF RESIDENTIAL PROPERTY NUMBERS
 
 def number_of_pages_listing():
     base_url = 'https://www.28hse.com/en/rent/residential'
@@ -46,12 +44,15 @@ def list_of_properties_scrapping():
     base_url = "https://www.28hse.com/en/rent/residential?page={page}&sortBy=default&search_words_thing=default&buyRent=rent&propertyDoSearchVersion=2.0"
     
     # Function to fetch and parse a page with retries
-    def fetch_page(page, max_retries=2):
+    def fetch_page(page, total_pages, progress_bar, max_retries=2):
+        progress_pct = int((page / total_pages) * 100)
+        st.markdown(progress_pct)
+        progress_bar.progress(progress_pct)
         url = base_url.format(page=page)
         
         for attempt in range(max_retries + 1):  # Try up to max_retries times
             try:
-                print(f"Fetching page {page}, attempt {attempt + 1}...")
+                print(f"Fetching page {page}/{total_pages}, attempt {attempt + 1}...")
                 response = requests.get(url, timeout=10)  # Set timeout to prevent hanging
                 
                 response.raise_for_status()  # Raise an exception for HTTP errors
@@ -73,11 +74,12 @@ def list_of_properties_scrapping():
     
     # Get total pages dynamically
     total_pages = number_of_pages_listing()
+    progress_bar = st.progress(0)
     
     # Use ThreadPoolExecutor to fetch pages in parallel
     with ThreadPoolExecutor(max_workers=10) as executor:
         # Submit tasks for all pages
-        future_to_page = {executor.submit(fetch_page, page): page for page in range(1, total_pages + 1)}
+        future_to_page = {executor.submit(fetch_page, page, total_pages, progress_bar): page for page in range(1, total_pages + 1)}
     
         # Process results as they complete
         for future in as_completed(future_to_page):
@@ -90,14 +92,10 @@ def list_of_properties_scrapping():
     
     # Print the total number of properties collected
     print(f"Collected {len(property_numbers)} property numbers")
-    return property_numbers
+    return [int(n) for n in property_numbers]
 
 
 # 2. WEB_SCRAPPING PROPERTIES DETAILS
-
-# 2.1 NUMBER OF PAGES OF RESIDENTIAL LISTING
-# 2.2 LIST OF RESIDENTIAL PROPERTY NUMBERS
-
 
 def extract_estate_info(soup):
     estate_info = soup.find('div', class_='estateInfo')
@@ -266,9 +264,6 @@ def get_properties_dataframe_parallel(property_numbers):
 
 
 # 3. WEB_SCRAPPING LEASING HISTORY
-
-# 3.1 NUMBER OF PAGES OF ADDRESS HISTORICAL LEASING
-# 3.2 SCRAPPING 
 
 def number_of_pages_building(base_url):
     response = requests.get(base_url)
@@ -441,4 +436,4 @@ def get_lease_history_parallel(list_of_url_history, property_df, max_workers=5):
                 df_history = pd.concat([df_history, result], ignore_index=True)
 
     return df_history
-
+    
