@@ -2,11 +2,10 @@ import plotly.graph_objects as go
 import html
 from streamlit.components.v1 import html as st_html
 import pandas as pd
-import streamlit as st 
 import folium
-import numpy as np
 from branca.colormap import linear
 from plotly.subplots import make_subplots
+from folium.plugins import MarkerCluster
 
 # Styling Functions
 def style_values(value, negative_style="color:red;", positive_style="color:green;"):
@@ -28,48 +27,64 @@ def style_dataframe(df):
             .format(style_format)  # Apply HTML escaping for clickable links
             .applymap(style_values, subset=['unit_price_vs_histo']))  # Apply additional styling to specific columns
 
+
 def plot_map(df):
-    # Define the desired center of the map (latitude, longitude)
+    # Define the center of the map (latitude, longitude)
     center_latitude = 22.3193  # Latitude for Hong Kong
     center_longitude = 114.1694  # Longitude for Hong Kong
 
-    # Create the map centered at the specified coordinates, with a less zoomed-in view
+    # Create the map centered at the specified coordinates
     property_map = folium.Map(location=[center_latitude, center_longitude], zoom_start=13)
 
     # Ensure necessary columns exist
-    if not all(col in df.columns for col in ['name', 'address', 'price', 'latitude', 'longitude', 'url']):
+    required_cols = ['province', 'area', 'price', 'floor_size', 'latitude', 'longitude', 'url', 'url_transit', 'url_history']
+    if not all(col in df.columns for col in required_cols):
         print("DataFrame is missing one or more required columns.")
         return
-    
+
+    # Use MarkerCluster to group markers at similar locations
+    marker_cluster = MarkerCluster().add_to(property_map)
+
+    # Dictionary to track identical coordinates
+    coordinate_count = {}
+
     # Loop through each property in the DataFrame and add a marker
     for index, row in df.iterrows():
         try:
-            province = row['province']
-            area = row['area']
-            price = row['price']
-            floor_size = row['floor_size']
-            latitude = float(row['latitude'])  # Ensure it's a float
-            longitude = float(row['longitude'])  # Ensure it's a float
-            url = row['url']
-            url_transit = row['url_transit']
-            url_history = row['url_history']
+            latitude = float(row['latitude'])
+            longitude = float(row['longitude'])
 
+            # Check for duplicate coordinates and apply small offsets if needed
+            coord_key = (latitude, longitude)
+            if coord_key in coordinate_count:
+                coordinate_count[coord_key] += 1
+                latitude += 0.0001 * coordinate_count[coord_key]  # Slight offset to prevent overlap
+                longitude += 0.0001 * coordinate_count[coord_key]
+            else:
+                coordinate_count[coord_key] = 0
+
+            # Construct the popup content
             popup_content = f"""
-            {html.escape(province)}<br>
-            {html.escape(area)}<br>
-            {html.escape(str(price))}<br>
-            {html.escape(str(floor_size))} sf<br>
-            <a href="{html.escape(url)}" target="_blank">Listing</a><br>
-            <a href="{html.escape(url_transit)}" target="_blank">Transit</a><br>
-            <a href="{html.escape(url_history)}" target="_blank">History</a>
+            {html.escape(row['province'])}<br>
+            {html.escape(row['area'])}<br>
+            {html.escape(str(row['price']))}<br>
+            {html.escape(str(row['floor_size']))} sf<br>
+            <a href="{html.escape(row['url'])}" target="_blank">Listing</a><br>
+            <a href="{html.escape(row['url_transit'])}" target="_blank">Transit</a><br>
             """
+            # Add url_history only if it's not NaN
+            if not (pd.isna(row['url_history']) or row['url_history'] == ''):
+                popup_content += f'<a href="{html.escape(row["url_history"])}" target="_blank">History</a>'
 
-            
-            folium.Marker([latitude, longitude], popup=popup_content).add_to(property_map)
-        
+            # Add marker to the cluster
+            folium.Marker(
+                [latitude, longitude],
+                popup=folium.Popup(popup_content, max_width=300)
+            ).add_to(marker_cluster)
+
         except Exception as e:
-            print(f"Error adding marker for index {index}: {e}")
-
+            print(f"Error adding marker for property {row['property_number']}: {e}")
+            
     # Save the map as an HTML string
     map_html = property_map._repr_html_()
     
@@ -82,7 +97,7 @@ def plot_map_color(df, coordinates_map):
     center_latitude = 22.3193  # Latitude for Hong Kong
     center_longitude = 114.1694  # Longitude for Hong Kong
 
-    df_price_district = df[['area_district','unit_price']].groupby(['area_district']).mean()
+    df_price_district = df[['area_district','unit_price']].dropna().groupby(['area_district']).mean()
     
     # Create the map centered at the specified coordinates, with a less zoomed-in view
     m = folium.Map(location=[center_latitude, center_longitude], zoom_start=10)
@@ -206,11 +221,3 @@ def plot_unit_price_evolution(df_print,column):
     )
 
     return fig
-
-        
-    
-    
-    
-    
-    
-    
